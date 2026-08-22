@@ -1,0 +1,15 @@
+{
+  "name": "party-banners",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Party Banners: Full-stack image name badge, stitched banner tapestry, and live SSE message feed application",
+  "scripts": {
+    "build": "cd client && npm run build",
+    "start": "NODE_ENV=production node server/index.js",
+    "stage": "NODE_ENV=staging node server/index.js",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "test:server": "cd server && npm test",
+    "build:client": "cd client && npm run build"
+  }
+}
