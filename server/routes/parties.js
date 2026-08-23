@@ -261,7 +261,9 @@ router.get('/:id', (req, res) => {
  * POST /api/parties
  * Create new party (Admin only)
  */
-router.post('/', requireAdmin, (req, res) => {
+import { createInitialPartyImagesAndBanner } from '../imageProcessor.js';
+
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const { name, slug, hero_image, tapestry_title, description, tags, gallery_images, social_links } = req.body;
 
@@ -300,6 +302,9 @@ router.post('/', requireAdmin, (req, res) => {
     });
 
     const newParty = dbQueries.findPartyById.get(result.lastInsertRowid);
+
+    // Automatically generate initial tapestry banner for the new Party
+    await createInitialPartyImagesAndBanner(newParty, req.user, dbQueries);
 
     res.status(201).json({
       message: 'Party registered successfully!',

@@ -244,3 +244,106 @@ export async function generateBannerTapestry(imageRecords, options = {}) {
     height: bannerHeight
   };
 }
+
+/**
+ * Automatically creates initial badged images and generates the initial tapestry banner for a Party.
+ */
+export async function createInitialPartyImagesAndBanner(party, adminUser, dbQueries) {
+  if (!party || !dbQueries) return null;
+
+  try {
+    const existingImages = dbQueries.getPartyImages.all(party.id);
+    const userName = adminUser?.name || 'Party Host';
+    const userId = adminUser?.id || 1;
+
+    // If no active images exist in DB for this party yet, create initial image tiles from hero & gallery images
+    if (!existingImages || existingImages.length === 0) {
+      const itemsToProcess = [];
+      if (party.hero_image) {
+        itemsToProcess.push({ url: party.hero_image, label: `${party.name} Hero` });
+      }
+
+      let parsedGallery = [];
+      if (typeof party.gallery_images === 'string') {
+        try { parsedGallery = JSON.parse(party.gallery_images); } catch (e) { parsedGallery = []; }
+      } else if (Array.isArray(party.gallery_images)) {
+        parsedGallery = party.gallery_images;
+      }
+
+      parsedGallery.forEach((gUrl, idx) => {
+        if (gUrl && typeof gUrl === 'string') {
+          itemsToProcess.push({ url: gUrl, label: `${party.name} #${idx + 1}` });
+        }
+      });
+
+      for (const item of itemsToProcess) {
+        try {
+          let imageBuffer = null;
+          if (item.url.startsWith('/uploads/')) {
+            const localPath = path.join(UPLOADS_DIR, item.url.replace('/uploads/', ''));
+            if (fs.existsSync(localPath)) {
+              imageBuffer = fs.readFileSync(localPath);
+            }
+          } else if (item.url.startsWith('http://') || item.url.startsWith('https://')) {
+            const fetchRes = await fetch(item.url);
+            if (fetchRes.ok) {
+              const arrayBuf = await fetchRes.arrayBuffer();
+              imageBuffer = Buffer.from(arrayBuf);
+            }
+          }
+
+          if (!imageBuffer) {
+            // Generate synthetic gradient tile
+            imageBuffer = await sharp({
+              create: {
+                width: 600,
+                height: 600,
+                channels: 4,
+                background: { r: 15, g: 23, b: 42, alpha: 1 }
+              }
+            }).png().toBuffer();
+          }
+
+          const processed = await processUploadedImage(imageBuffer, item.label || userName);
+          dbQueries.insertImage.run({
+            party_id: party.id,
+            user_id: userId,
+            user_name: item.label || userName,
+            original_filename: 'hero_image.png',
+            processed_filename: processed.filename
+          });
+        } catch (err) {
+          console.error('Initial party image processing error:', err);
+        }
+      }
+    }
+
+    // Generate banner tapestry from all available party images
+    const recentImages = dbQueries.getRecentPartyImages.all(party.id, 24);
+    if (recentImages && recentImages.length > 0) {
+      const bannerTitle = party.tapestry_title || `${party.name} Tapestry`;
+      const bannerResult = await generateBannerTapestry(recentImages, { title: bannerTitle });
+      
+      const insertResult = dbQueries.insertBanner.run({
+        party_id: party.id,
+        filename: bannerResult.filename,
+        title: bannerTitle,
+        image_count: bannerResult.imageCount,
+        grid_layout: bannerResult.gridLayout
+      });
+
+      return {
+        id: insertResult.lastInsertRowid,
+        party_id: party.id,
+        filename: bannerResult.filename,
+        title: bannerTitle,
+        image_count: bannerResult.imageCount,
+        grid_layout: bannerResult.gridLayout,
+        url: bannerResult.relativePath
+      };
+    }
+  } catch (err) {
+    console.error('createInitialPartyImagesAndBanner error:', err);
+  }
+  return null;
+}
