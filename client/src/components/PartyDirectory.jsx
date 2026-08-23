@@ -240,6 +240,10 @@ export default function PartyDirectory({ onSelectParty, onOpenCreateParty }) {
                   src={party.hero_image}
                   alt={party.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = 'https://images.unsplash.com/photo-1579033461380-adb47c3eb938?auto=format&fit=crop&w=800&q=80';
+                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
 
