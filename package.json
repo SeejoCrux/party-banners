@@ -4,7 +4,7 @@
   "private": true,
   "description": "Party Banners: Full-stack image name badge, stitched banner tapestry, and live SSE message feed application",
   "scripts": {
-    "build": "cd client && npm run build",
+    "build": "cd client && npm install --include=dev && npm run build",
     "postinstall": "cd server && npm install && cd ../client && npm install",
     "start": "NODE_ENV=production node server/index.js",
     "stage": "NODE_ENV=staging node server/index.js",
