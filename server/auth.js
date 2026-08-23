@@ -2,37 +2,33 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { dbQueries } from './db.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secret-jwt-key-for-dev-mode-375928375';
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+export function getJwtSecret() {
+  return process.env.JWT_SECRET || 'secret-jwt-key-for-dev-mode-375928375';
+}
 
-// Super Admin Google identities & emails
-export const SUPER_ADMIN_EMAILS = (
-  process.env.SUPER_ADMIN_EMAILS || 'seejo.crux@gmail.com'
-)
-  .split(',')
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+export function getSuperAdminEmails() {
+  return (process.env.SUPER_ADMIN_EMAILS || 'seejo.crux@gmail.com')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
 
-// Regular Admin Google identities & emails
-export const ADMIN_EMAILS = (
-  process.env.ADMIN_EMAILS || 'admin@example.com,admin@tapestry.local,test.admin@example.com'
-)
-  .split(',')
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
-
-const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET) : null;
+export function getAdminEmails() {
+  return (process.env.ADMIN_EMAILS || 'admin@example.com,admin@tapestry.local,test.admin@example.com')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
 
 export function isSuperAdminEmail(email) {
   if (!email) return false;
-  return SUPER_ADMIN_EMAILS.includes(email.toLowerCase().trim());
+  return getSuperAdminEmails().includes(email.toLowerCase().trim());
 }
 
 export function isUserAdminEmail(email) {
   if (!email) return false;
   const em = email.toLowerCase().trim();
-  return ADMIN_EMAILS.includes(em) || isSuperAdminEmail(em);
+  return getAdminEmails().includes(em) || isSuperAdminEmail(em);
 }
 
 export function signToken(user) {
@@ -47,14 +43,14 @@ export function signToken(user) {
       is_admin: isAdmin,
       is_super_admin: isSuperAdmin
     },
-    JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: '7d' }
   );
 }
 
 export function verifyToken(token) {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, getJwtSecret());
   } catch (err) {
     return null;
   }
@@ -108,13 +104,17 @@ export function requireSuperAdmin(req, res, next) {
 }
 
 export async function verifyGoogleCredential(credential) {
-  if (!googleClient) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId) {
     throw new Error('Google OAuth Client ID is not configured on server.');
   }
 
-  const ticket = await googleClient.verifyIdToken({
+  const client = new OAuth2Client(clientId, clientSecret);
+  const ticket = await client.verifyIdToken({
     idToken: credential,
-    audience: GOOGLE_CLIENT_ID
+    audience: clientId
   });
 
   const payload = ticket.getPayload();

@@ -117,6 +117,20 @@ export function AuthProvider({ children }) {
     checkAuth();
   }, [token]);
 
+  const safeFetchJson = async (res, defaultErrorMsg = 'Request failed') => {
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || defaultErrorMsg);
+      }
+      return data;
+    }
+    const text = await res.text();
+    console.error('Non-JSON response received from server:', res.status, text);
+    throw new Error(`Server returned non-JSON response (${res.status}). Check server logs.`);
+  };
+
   const loginWithToken = (newToken, userData) => {
     localStorage.setItem('tapestry_auth_token', newToken);
     setToken(newToken);
@@ -135,10 +149,7 @@ export function AuthProvider({ children }) {
         is_admin: isAdmin
       })
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Login failed');
-    }
+    const data = await safeFetchJson(res, 'Login failed');
     loginWithToken(data.token, data.user);
     return data.user;
   };
@@ -149,10 +160,7 @@ export function AuthProvider({ children }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ credential })
     });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Google Sign-In failed');
-    }
+    const data = await safeFetchJson(res, 'Google Sign-In failed');
     loginWithToken(data.token, data.user);
     return data.user;
   };
