@@ -6,8 +6,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
-const BANNERS_DIR = path.join(__dirname, 'uploads', 'banners');
+const UPLOADS_DIR = process.env.UPLOADS_PATH || path.join(__dirname, 'uploads');
+const BANNERS_DIR = path.join(UPLOADS_DIR, 'banners');
 
 // Ensure directories exist
 if (!fs.existsSync(UPLOADS_DIR)) {

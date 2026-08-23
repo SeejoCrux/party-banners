@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: party-banners
+    runtime: node
+    plan: pro
+    buildCommand: npm run build
+    startCommand: npm start
+    disk:
+      name: party-data
+      mountPath: /var/data
+      sizeGB: 10
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_PATH
+        value: /var/data/database-production.sqlite
+      - key: UPLOADS_PATH
+        value: /var/data/uploads
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SUPER_ADMIN_EMAILS
+        value: seejo.crux@gmail.com
