@@ -51,6 +51,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Fallback JSON 404 handler for API routes
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.path}` });
+});
+
 // Serve built client in production if client/dist exists
 const clientDistDir = path.join(__dirname, '../client/dist');
 if (fs.existsSync(clientDistDir)) {
