@@ -20,6 +20,7 @@ A full-stack collaborative event platform where registered Fans and Admins can:
 - **Image Processing**: `sharp` for pixel-level name overlay composition and grid mosaic stitching
 - **Real-Time Feed**: Server-Sent Events (SSE) `/api/messages/stream` + REST pagination `/api/messages`
 - **Frontend**: React 18, Vite, Tailwind CSS, Lucide Icons
+- **Hosting**: Render.com
 
 ---
 
