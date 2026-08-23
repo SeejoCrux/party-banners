@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireAuth } from '../auth.js';
-import { generateBannerTapestry } from '../imageProcessor.js';
 import { dbQueries } from '../db.js';
+import { generateBannerTapestry, createInitialPartyImagesAndBanner } from '../imageProcessor.js';
 
 const router = express.Router();
 
@@ -9,14 +9,22 @@ const router = express.Router();
  * GET /api/banner/latest
  * Get the most recently generated banner tapestry for a specific party
  */
-router.get('/latest', (req, res) => {
+router.get('/latest', async (req, res) => {
   try {
     const partyId = req.query.party_id ? parseInt(req.query.party_id, 10) : null;
     if (!partyId) {
       return res.status(400).json({ error: 'party_id query parameter is required. Tapestries belong to a Party.' });
     }
 
-    const banner = dbQueries.getLatestPartyBanner.get(partyId);
+    let banner = dbQueries.getLatestPartyBanner.get(partyId);
+
+    if (!banner) {
+      const party = dbQueries.findPartyById.get(partyId);
+      if (party) {
+        await createInitialPartyImagesAndBanner(party, null, dbQueries);
+        banner = dbQueries.getLatestPartyBanner.get(partyId);
+      }
+    }
 
     if (!banner) {
       return res.json({ banner: null });

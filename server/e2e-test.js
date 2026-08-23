@@ -66,10 +66,12 @@ async function runE2ETests() {
       console.log('ℹ️ No public parties exist in DB for message test (Clean state verified)');
     }
 
-    // 6. Fetch Latest Banner
-    const bannerRes = await fetch(`${baseUrl}/api/banner/latest`);
-    const bannerData = await bannerRes.json();
-    console.log('✅ Latest Banner fetched:', bannerData.banner ? bannerData.banner.filename : 'None yet');
+    // 6. Fetch Latest Banner for Party
+    if (party) {
+      const bannerRes = await fetch(`${baseUrl}/api/banner/latest?party_id=${party.id}`);
+      const bannerData = await bannerRes.json();
+      console.log('✅ Latest Banner fetched for party:', bannerData.banner ? bannerData.banner.filename : 'None yet');
+    }
 
     console.log('🎉 ALL END-TO-END SERVER TESTS PASSED!');
   } finally {
