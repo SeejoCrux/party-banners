@@ -170,6 +170,10 @@ export default function PartyDetailView({ party, onBack, onOpenReport, sseConnec
             src={partyData.hero_image}
             alt={partyData.name}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = 'https://images.unsplash.com/photo-1579033461380-adb47c3eb938?auto=format&fit=crop&w=1200&q=80';
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" />
           <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-[2px]" />
