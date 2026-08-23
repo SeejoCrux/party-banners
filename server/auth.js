@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
-import { dbQueries } from './db.js';
+import { dbQueries, deduplicateUsersByEmail } from './db.js';
 
 export function getJwtSecret() {
   return process.env.JWT_SECRET || 'secret-jwt-key-for-dev-mode-375928375';
@@ -133,6 +133,10 @@ export async function verifyGoogleCredential(credential) {
 
 export function loginOrRegisterGoogleUser(profile) {
   let user = dbQueries.findUserByGoogleId.get(profile.google_id);
+  if (!user && profile.email) {
+    user = dbQueries.findUserByEmail.get(profile.email);
+  }
+
   const isSuper = profile.is_super_admin || isSuperAdminEmail(profile.email) ? 1 : 0;
   const isAdmin = isSuper || profile.is_admin || (profile.email && isUserAdminEmail(profile.email)) ? 1 : 0;
 
@@ -155,6 +159,7 @@ export function loginOrRegisterGoogleUser(profile) {
   } else {
     dbQueries.updateUser.run({
       id: user.id,
+      google_id: profile.google_id || user.google_id,
       name: profile.name || user.name,
       email: profile.email || user.email,
       avatar_url: profile.avatar_url || user.avatar_url,
@@ -163,6 +168,11 @@ export function loginOrRegisterGoogleUser(profile) {
     });
     user = dbQueries.findUserById.get(user.id);
   }
+
+  if (profile.email) {
+    deduplicateUsersByEmail();
+  }
+
   user.is_super_admin = isSuper || user.is_super_admin ? 1 : 0;
   user.is_admin = isAdmin || user.is_admin || user.is_super_admin ? 1 : 0;
   return user;
@@ -170,7 +180,12 @@ export function loginOrRegisterGoogleUser(profile) {
 
 export function devLoginUser(name, email, avatarUrl, forcedIsAdmin = false) {
   const devGoogleId = `dev-user-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+  const finalEmail = email ? email.trim() : `${devGoogleId}@example.com`;
+
   let user = dbQueries.findUserByGoogleId.get(devGoogleId);
+  if (!user && finalEmail) {
+    user = dbQueries.findUserByEmail.get(finalEmail);
+  }
 
   if (user && user.is_banned === 1) {
     const err = new Error('Your account has been suspended by an administrator.');
@@ -178,7 +193,6 @@ export function devLoginUser(name, email, avatarUrl, forcedIsAdmin = false) {
     throw err;
   }
 
-  const finalEmail = email ? email.trim() : `${devGoogleId}@example.com`;
   const isSuper = isSuperAdminEmail(finalEmail) ? 1 : 0;
   const isAdmin = isSuper || forcedIsAdmin || isUserAdminEmail(finalEmail) || name.toLowerCase().includes('admin') ? 1 : 0;
   const finalAvatar = avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`;
@@ -196,6 +210,7 @@ export function devLoginUser(name, email, avatarUrl, forcedIsAdmin = false) {
   } else {
     dbQueries.updateUser.run({
       id: user.id,
+      google_id: devGoogleId,
       name: name.trim(),
       email: finalEmail,
       avatar_url: finalAvatar,
@@ -203,6 +218,10 @@ export function devLoginUser(name, email, avatarUrl, forcedIsAdmin = false) {
       is_super_admin: isSuper || user.is_super_admin
     });
     user = dbQueries.findUserById.get(user.id);
+  }
+
+  if (finalEmail) {
+    deduplicateUsersByEmail();
   }
 
   user.is_super_admin = isSuper || user.is_super_admin ? 1 : 0;
