@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth, SAMPLE_PERSONAS } from '../context/AuthContext';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { X, User, Sparkles, LogIn, KeyRound, ShieldCheck, Crown } from 'lucide-react';
 
 export default function AuthModal() {
@@ -7,9 +8,11 @@ export default function AuthModal() {
     isAuthModalOpen,
     closeAuthModal,
     loginWithDev,
+    loginWithGoogle,
     authConfig,
     devLoginEnabled,
-    googleClientIdConfigured
+    googleClientIdConfigured,
+    googleClientId
   } = useAuth();
   const [customName, setCustomName] = useState('');
   const [customEmail, setCustomEmail] = useState('');
@@ -196,12 +199,34 @@ export default function AuthModal() {
               </p>
             </div>
 
-            {googleClientIdConfigured ? (
-              <div className="py-4">
-                <p className="text-xs text-slate-400 mb-3">Sign in securely using your Google Account:</p>
-                <div id="google-signin-container" className="flex justify-center">
-                  {/* Google OAuth Button Container */}
-                  <span className="text-xs text-slate-500">Google OAuth Initialized</span>
+            {googleClientIdConfigured && googleClientId ? (
+              <div className="py-4 flex flex-col items-center justify-center space-y-3">
+                <p className="text-xs text-slate-400 mb-1">Sign in securely using your Google Account:</p>
+                <div className="flex justify-center">
+                  <GoogleOAuthProvider clientId={googleClientId}>
+                    <GoogleLogin
+                      onSuccess={async (credentialResponse) => {
+                        if (credentialResponse.credential) {
+                          try {
+                            setLoading(true);
+                            setError(null);
+                            await loginWithGoogle(credentialResponse.credential);
+                          } catch (err) {
+                            setError(err.message || 'Google Sign-In failed');
+                          } finally {
+                            setLoading(false);
+                          }
+                        }
+                      }}
+                      onError={() => {
+                        setError('Google Sign-In failed. Please try again.');
+                      }}
+                      theme="filled_blue"
+                      shape="pill"
+                      size="large"
+                      text="signin_with"
+                    />
+                  </GoogleOAuthProvider>
                 </div>
               </div>
             ) : (
