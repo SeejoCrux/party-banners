@@ -161,7 +161,7 @@ const stmts = {
     INSERT INTO users (google_id, name, email, avatar_url, is_admin, is_super_admin, is_banned, honor, honor_updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 0, 'Good', CURRENT_TIMESTAMP)
   `),
-  updateUser: db.prepare('UPDATE users SET name = ?, email = ?, avatar_url = ?, is_admin = ?, is_super_admin = ? WHERE id = ?'),
+  updateUser: db.prepare('UPDATE users SET google_id = COALESCE(?, google_id), name = ?, email = ?, avatar_url = ?, is_admin = ?, is_super_admin = ? WHERE id = ?'),
   setUserCooldown: db.prepare('UPDATE users SET report_cooldown_until = ? WHERE id = ?'),
   setUserBanStatus: db.prepare('UPDATE users SET is_banned = ?, banned_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id = ?'),
   setUserAdminRole: db.prepare('UPDATE users SET is_admin = ? WHERE id = ?'),
@@ -331,6 +331,7 @@ export const dbQueries = {
   },
   updateUser: {
     run: (u) => stmts.updateUser.run(
+      u.google_id || null,
       u.name,
       u.email || '',
       u.avatar_url || '',
@@ -537,21 +538,79 @@ if (shouldSeedSampleData) {
   }
 }
 
+/**
+ * Migration helper: Enforces one account per email address.
+ * Deletes older copies of an email account, reassigns content references,
+ * and creates a unique database index on LOWER(email).
+ */
+export function deduplicateUsersByEmail() {
+  try {
+    const duplicates = db.prepare(`
+      SELECT LOWER(email) as email, COUNT(*) as count
+      FROM users
+      WHERE email IS NOT NULL AND TRIM(email) != ''
+      GROUP BY LOWER(email)
+      HAVING count > 1
+    `).all();
+
+    for (const dup of duplicates) {
+      // Order by created_at DESC, id DESC so the newest record is kept
+      const userRows = db.prepare(`
+        SELECT * FROM users
+        WHERE LOWER(email) = LOWER(?)
+        ORDER BY created_at DESC, id DESC
+      `).all(dup.email);
+
+      if (userRows.length > 1) {
+        const newestUser = userRows[0];
+        const olderUsers = userRows.slice(1);
+
+        for (const oldUser of olderUsers) {
+          // Reassign foreign key references to the newest user record
+          db.prepare('UPDATE images SET user_id = ? WHERE user_id = ?').run(newestUser.id, oldUser.id);
+          db.prepare('UPDATE messages SET user_id = ? WHERE user_id = ?').run(newestUser.id, oldUser.id);
+          db.prepare('UPDATE parties SET reported_by_id = ? WHERE reported_by_id = ?').run(newestUser.id, oldUser.id);
+          db.prepare('UPDATE parties SET moderated_by_id = ? WHERE moderated_by_id = ?').run(newestUser.id, oldUser.id);
+          db.prepare('UPDATE images SET reported_by_id = ? WHERE reported_by_id = ?').run(newestUser.id, oldUser.id);
+          db.prepare('UPDATE images SET moderated_by_id = ? WHERE moderated_by_id = ?').run(newestUser.id, oldUser.id);
+          db.prepare('UPDATE messages SET reported_by_id = ? WHERE reported_by_id = ?').run(newestUser.id, oldUser.id);
+          db.prepare('UPDATE messages SET moderated_by_id = ? WHERE moderated_by_id = ?').run(newestUser.id, oldUser.id);
+
+          // Delete the older copy of the email account
+          db.prepare('DELETE FROM users WHERE id = ?').run(oldUser.id);
+          console.log(`Deduplicated email '${dup.email}': kept newest user ID ${newestUser.id}, deleted older copy ID ${oldUser.id}`);
+        }
+      }
+    }
+
+    // Create unique index on LOWER(email) to enforce database-level uniqueness
+    db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique 
+      ON users(LOWER(email)) 
+      WHERE email IS NOT NULL AND TRIM(email) != '';
+    `);
+  } catch (e) {
+    if (!e.message?.includes('duplicate key') && !e.message?.includes('UNIQUE constraint failed')) {
+      console.warn('Note on deduplicateUsersByEmail:', e.message);
+    }
+  }
+}
+
+// Run deduplication migration on startup
+deduplicateUsersByEmail();
+
 // Clean and initialize Super Admin and Test Admin accounts
 try {
   const superAdminEmail = 'seejo.crux@gmail.com';
-  const superUsers = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?)').all(superAdminEmail);
+  deduplicateUsersByEmail();
 
-  if (superUsers.length > 0) {
-    const primary = superUsers[0];
+  const superUser = db.prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(?) ORDER BY created_at DESC, id DESC LIMIT 1').get(superAdminEmail);
+
+  if (superUser) {
     db.prepare("UPDATE users SET name = ?, is_admin = 1, is_super_admin = 1, is_banned = 0, honor = 'Good' WHERE id = ?").run(
       'Seejo Crux',
-      primary.id
+      superUser.id
     );
-    // Delete duplicate accounts with that email
-    for (let i = 1; i < superUsers.length; i++) {
-      db.prepare('DELETE FROM users WHERE id = ?').run(superUsers[i].id);
-    }
   } else {
     // Create primary Super Admin
     dbQueries.createUser.run({

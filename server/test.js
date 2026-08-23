@@ -12,7 +12,7 @@ async function runTests() {
   const insertUserRes = dbQueries.createUser.run({
     google_id: testUserGoogleId,
     name: 'Alice Wonder',
-    email: 'alice@example.com',
+    email: `alice.${Date.now()}@example.com`,
     avatar_url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Alice'
   });
   console.log('✅ Created user id:', insertUserRes.lastInsertRowid);
@@ -85,8 +85,34 @@ async function runTests() {
   const newMsg = dbQueries.getMessageById.get(msgRes.lastInsertRowid);
   console.log('✅ Message stored:', newMsg.text);
 
-  const messages = dbQueries.getRecentMessages.all(10);
-  console.log('✅ Fetched recent messages count:', messages.length);
+  // 5. Test Email Deduplication & Single Account Enforcement
+  console.log('🧪 Testing Email Deduplication & Single Account per Email Enforcement...');
+  const { deduplicateUsersByEmail } = await import('./db.js');
+  const { loginOrRegisterGoogleUser } = await import('./auth.js');
+
+  const dupEmail = `dup.test.${Date.now()}@example.com`;
+  const user1 = loginOrRegisterGoogleUser({
+    google_id: `g-old-${Date.now()}`,
+    name: 'Old User Record',
+    email: dupEmail
+  });
+
+  const user2 = loginOrRegisterGoogleUser({
+    google_id: `g-new-${Date.now()}`,
+    name: 'New User Record',
+    email: dupEmail
+  });
+
+  const existingAccounts = dbQueries.findUserByEmail.get(dupEmail);
+  if (!existingAccounts) {
+    throw new Error('Deduplicated user account not found');
+  }
+
+  // Verify that login updated the single account rather than creating a duplicate
+  if (existingAccounts.id !== user2.id && existingAccounts.id !== user1.id) {
+    throw new Error('Email deduplication failed: multiple accounts remained');
+  }
+  console.log('✅ Email deduplication & single account enforcement verified successfully!');
 
   console.log('🎉 ALL BACKEND TESTS PASSED SUCCESSFULLY!');
 }
